@@ -486,14 +486,69 @@ class CapCutClient:
         except Exception as exc:
             raise CapCutError(f"Failed to parse subtitle payload: {exc}") from exc
 
+    def _get_default_voices(self) -> List[VoiceInfo]:
+        """Danh sách voice mặc định nếu không tìm thấy Voice.json"""
+        defaults = [
+            {"lan": "vi", "lang": "vi-VN", "voice_type": "BV074_streaming", "display_name": "Cô Gái Hoạt Ngôn", "resource_id": "7102355709945188865"},
+            {"lan": "vi", "lang": "vi-VN", "voice_type": "BV421_vivn_streaming", "display_name": "Nhỏ Ngọt Ngào", "resource_id": "7252594014782755330"},
+            {"lan": "vi", "lang": "vi-VN", "voice_type": "vi_female_huong", "display_name": "Giọng Nữ Phổ Thông", "resource_id": "7264854897953083905"},
+            {"lan": "vi", "lang": "vi-VN", "voice_type": "BV075_streaming", "display_name": "Thanh Niên Tự Tin", "resource_id": "7102355803792740865"},
+            {"lan": "vi", "lang": "vi-VN", "voice_type": "BV075_streaming_robot_dsp", "display_name": "Robot VN", "resource_id": "7538698409633516816"},
+            {"lan": "vi", "lang": "vi-VN", "voice_type": "BV562_streaming", "display_name": "Mai", "resource_id": "7483736254694035984"},
+            {"lan": "vi", "lang": "vi-VN", "voice_type": "multi_female_peiqi_uranus_bigtts", "display_name": "Giọng Gái Mới Lớn", "resource_id": "7637458789033151751"},
+            {"lan": "vi", "lang": "vi-VN", "voice_type": "multi_male_felipe_uranus_bigtts", "display_name": "Giọng Nam Trầm", "resource_id": "7637456729696996628"},
+            {"lan": "vi", "lang": "vi-VN", "voice_type": "BV560_streaming", "display_name": "Alex Đại Đế", "resource_id": "7483736167565758992"},
+            {"lan": "vi", "lang": "vi-VN", "voice_type": "vi-VN-HoaiMyNeural", "display_name": "Hoai My (Neural)", "resource_id": "7371666434650280464"},
+            {"lan": "vi", "lang": "vi-VN", "voice_type": "vi-VN-NamMinhNeural", "display_name": "Nam Minh (Neural)", "resource_id": "7371666524727153168"},
+            {"lan": "en", "lang": "en-US", "voice_type": "en_us_006", "display_name": "EN US 2", "resource_id": "7114563482518819329"},
+            {"lan": "en", "lang": "en-US", "voice_type": "en_us_002", "display_name": "EN US", "resource_id": "7130515992936976897"},
+            {"lan": "en", "lang": "en-US", "voice_type": "en_female_sherry", "display_name": "Sherry", "resource_id": "7278146554844680706"},
+            {"lan": "en", "lang": "en-US", "voice_type": "en_male_deadpool", "display_name": "Deadpool", "resource_id": "7231025912261644802"},
+            {"lan": "ja", "lang": "ja-JP", "voice_type": "ICL_ja_female_zhiyu", "display_name": "Lovely Idol", "resource_id": "7579078759446285584"},
+            {"lan": "ja", "lang": "ja-JP", "voice_type": "ICL_ja_male_xinggan", "display_name": "Xinggan", "resource_id": "7522965008020540688"},
+            {"lan": "zh", "lang": "zh-CN", "voice_type": "BV452_streaming", "display_name": "Vũ hán", "resource_id": "7543766515837848833"},
+            {"lan": "zh", "lang": "zh-CN", "voice_type": "zh_female_xiaonan_lv_clone2", "display_name": "旅遊主播", "resource_id": "7554226531451833617"},
+            {"lan": "fr", "lang": "fr-FR", "voice_type": "DiT_fr_male_wit", "display_name": "Wit", "resource_id": "7573964692587023617"},
+            {"lan": "es", "lang": "es-ES", "voice_type": "DiT_es_male_bilunan", "display_name": "Señor entusiasta", "resource_id": "7597943534309690641"},
+            {"lan": "de", "lang": "de-DE", "voice_type": "DiT_de_male_koubo", "display_name": "Koubo", "resource_id": "7584344912276114704"},
+            {"lan": "th", "lang": "th-TH", "voice_type": "BV567_streaming_dsp", "display_name": "เด็กเสียง", "resource_id": "7550069260152818960"},
+            {"lan": "id", "lang": "id-ID", "voice_type": "id_female_icha_uranus_bigtts", "display_name": "Icathian", "resource_id": "7587328219989249296"},
+        ]
+        return [VoiceInfo(**v) for v in defaults]
+
     def list_voices(
         self, lang: Optional[str] = None, catalog_path: Optional[Union[str, Path]] = None
     ) -> List[VoiceInfo]:
         """
         List available CapCut TTS voices from catalog file.
         """
-        path = catalog_path or Path(__file__).parent.parent / "Voice.json"
-        voices = VoiceInfo.load_catalog(path)
+        # Ưu tiên catalog_path truyền vào
+        if catalog_path is not None:
+            path = Path(catalog_path)
+            if path.exists():
+                voices = VoiceInfo.load_catalog(path)
+                if lang:
+                    return [v for v in voices if v.lang.lower() == lang.lower() or v.lan.lower() == lang.lower()]
+                return voices
+        
+        # Tìm Voice.json ở nhiều vị trí
+        possible_paths = [
+            Path(__file__).parent.parent / "Voice.json",  # Thư mục cha của capcut_tts_api
+            Path(__file__).parent / "Voice.json",          # Cùng thư mục với client.py
+            Path.cwd() / "Voice.json",                     # Thư mục làm việc hiện tại
+            Path("/app/Voice.json"),                       # Render.com default
+            Path("./Voice.json"),                          # Tương đối
+        ]
+        
+        for p in possible_paths:
+            if p.exists():
+                voices = VoiceInfo.load_catalog(p)
+                if lang:
+                    return [v for v in voices if v.lang.lower() == lang.lower() or v.lan.lower() == lang.lower()]
+                return voices
+        
+        # Fallback: trả về danh sách mặc định
+        voices = self._get_default_voices()
         if lang:
             return [v for v in voices if v.lang.lower() == lang.lower() or v.lan.lower() == lang.lower()]
         return voices
