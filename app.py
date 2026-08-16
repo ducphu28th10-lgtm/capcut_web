@@ -83,17 +83,36 @@ def format_srt_time(ms):
 def generate_srt(utterances):
     """
     Tạo nội dung SRT từ danh sách utterances.
-    Mỗi utterance là một câu, có start_time và end_time (milliseconds).
+    Mỗi từ là một dòng phụ đề riêng (one word at a time).
     """
     srt_lines = []
-    for i, u in enumerate(utterances, 1):
-        start = format_srt_time(u.start_time)
-        end = format_srt_time(u.end_time)
-        text = u.text.strip()
-        srt_lines.append(f"{i}")
-        srt_lines.append(f"{start} --> {end}")
-        srt_lines.append(text)
-        srt_lines.append("")  # Dòng trống giữa các câu
+    index = 1
+    
+    for u in utterances:
+        # Nếu có words với timestamp, dùng từng từ
+        if u.words and len(u.words) > 0:
+            for w in u.words:
+                start = format_srt_time(w.start_time)
+                end = format_srt_time(w.end_time)
+                text = w.text.strip()
+                if text:  # Bỏ qua từ rỗng
+                    srt_lines.append(f"{index}")
+                    srt_lines.append(f"{start} --> {end}")
+                    srt_lines.append(text)
+                    srt_lines.append("")  # Dòng trống giữa các từ
+                    index += 1
+        else:
+            # Nếu không có words, dùng cả câu
+            start = format_srt_time(u.start_time)
+            end = format_srt_time(u.end_time)
+            text = u.text.strip()
+            if text:
+                srt_lines.append(f"{index}")
+                srt_lines.append(f"{start} --> {end}")
+                srt_lines.append(text)
+                srt_lines.append("")
+                index += 1
+    
     return "\n".join(srt_lines)
 
 # ============================================
