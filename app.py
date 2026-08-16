@@ -69,6 +69,33 @@ def generate_filename(ext="mp3"):
     
     return filename
 
+def format_srt_time(ms):
+    """
+    Chuyển milliseconds sang định dạng SRT: HH:MM:SS,mmm
+    """
+    ms = int(ms)
+    hours = ms // 3600000
+    minutes = (ms % 3600000) // 60000
+    seconds = (ms % 60000) // 1000
+    millis = ms % 1000
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d},{millis:03d}"
+
+def generate_srt(utterances):
+    """
+    Tạo nội dung SRT từ danh sách utterances.
+    Mỗi utterance là một câu, có start_time và end_time (milliseconds).
+    """
+    srt_lines = []
+    for i, u in enumerate(utterances, 1):
+        start = format_srt_time(u.start_time)
+        end = format_srt_time(u.end_time)
+        text = u.text.strip()
+        srt_lines.append(f"{i}")
+        srt_lines.append(f"{start} --> {end}")
+        srt_lines.append(text)
+        srt_lines.append("")  # Dòng trống giữa các câu
+    return "\n".join(srt_lines)
+
 # ============================================
 # HÀM HỖ TRỢ TẢI VIDEO
 # ============================================
@@ -340,6 +367,8 @@ def api_stt_upload():
                         'words': [{'text': w.text, 'start': w.start_time, 'end': w.end_time} for w in u.words]
                     } for u in subs.utterances]
                 }
+                # THÊM SRT CONTENT VÀO KẾT QUẢ
+                result['srt_content'] = generate_srt(subs.utterances)
                 os.unlink(tmp.name)
                 return jsonify(result)
             elif status in ('failed', 'error', 'fail'):
@@ -353,6 +382,25 @@ def api_stt_upload():
         except:
             pass
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/stt/download-srt', methods=['POST'])
+def api_stt_download_srt():
+    """
+    Nhận dữ liệu SRT từ client và cho tải về file .srt
+    """
+    data = request.get_json()
+    srt_content = data.get('srt_content', '')
+    filename = data.get('filename', 'subtitles.srt')
+    
+    if not srt_content:
+        return jsonify({'error': 'No SRT content'}), 400
+    
+    # Tạo file tạm
+    tmp = tempfile.NamedTemporaryFile(suffix='.srt', delete=False, mode='w', encoding='utf-8')
+    tmp.write(srt_content)
+    tmp.close()
+    
+    return send_file(tmp.name, as_attachment=True, download_name=filename)
 
 @app.route('/api/languages')
 def api_languages():
