@@ -4,6 +4,10 @@ import tempfile
 import threading
 import time
 import urllib.request
+import re
+import json
+from datetime import datetime
+from urllib.parse import unquote
 from pathlib import Path
 from flask import Flask, request, jsonify, send_file, render_template
 from capcut_tts_api import CapCutClient
@@ -16,6 +20,85 @@ app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
 _client = None
 _voices_cache = None
 _voices_lock = threading.Lock()
+
+def extract_clean_url(messy_string):
+    """
+    Trích xuất URL sạch từ chuỗi bất kỳ.
+    """
+    decoded = unquote(messy_string)
+    raw_urls = re.findall(r'https?://[^\s<>"\'()\[\]{}]+', decoded)
+    if not raw_urls:
+        raw_urls = re.findall(r'https?://[^\s<>"\'()\[\]{}]+', messy_string)
+        if not raw_urls:
+            return None
+    url = raw_urls[0].strip('.,;:!?')
+    return url
+
+def get_video_info(clean_url):
+    """
+    Gọi API GenDownload.
+    """
+    api_url = "https://gendownload.com/api/extract"
+    headers = {"Content-Type": "application/json"}
+    payload = {"url": clean_url}
+    
+    response = requests.post(api_url, json=payload, headers=headers, timeout=30)
+    if response.status_code != 200:
+        return {"error": f"API lỗi: {response.status_code}"}
+    return response.json()
+
+def download_video_from_format(format_url, filename):
+    """
+    Tải video.
+    """
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://gendownload.com/'
+    }
+    
+    response = requests.get(format_url, headers=headers, stream=True, timeout=60)
+    if response.status_code != 200:
+        return {"error": f"Tải thất bại: {response.status_code}"}
+    
+    total_size = int(response.headers.get('content-length', 0))
+    downloaded = 0
+    
+    with open(filename, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            if chunk:
+                f.write(chunk)
+                downloaded += len(chunk)
+    
+    return {"status": "success", "filename": filename, "size": downloaded}
+
+def generate_filename(ext="mp4"):
+    """
+    Tạo tên file CHỈ theo định dạng ngày-tháng-STT.
+    """
+    now = datetime.now()
+    day = f"{now.day:02d}"
+    month = f"{now.month:02d}"
+    
+    pattern = f"^{day}-{month}-(\\d+)\\."
+    downloads_dir = 'downloads'
+    
+    if not os.path.exists(downloads_dir):
+        os.makedirs(downloads_dir)
+    
+    existing_files = [f for f in os.listdir(downloads_dir) if re.match(pattern, f)]
+    
+    max_num = 0
+    for f in existing_files:
+        match = re.search(pattern, f)
+        if match:
+            num = int(match.group(1))
+            if num > max_num:
+                max_num = num
+    
+    video_num = max_num + 1
+    
+    filename = f"{day}-{month}-{video_num}.{ext}"
+    return filename
 
 def get_client():
     global _client
