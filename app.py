@@ -189,6 +189,35 @@ def generate_srt(utterances):
     
     return "\n".join(srt_lines)
 
+def generate_title(full_text):
+    """
+    Tạo tiêu đề tự động từ nội dung văn bản.
+    Lấy câu đầu tiên hoặc 6-8 từ đầu tiên làm tiêu đề.
+    """
+    if not full_text:
+        return "Không có tiêu đề"
+    
+    text = full_text.strip()
+    
+    # Tách câu
+    sentences = re.split(r'[.!?]+', text)
+    first_sentence = sentences[0].strip() if sentences else text
+    
+    # Lấy 6-8 từ đầu tiên
+    words = first_sentence.split()
+    
+    if len(words) <= 8:
+        title = first_sentence
+    else:
+        title = ' '.join(words[:8]) + '...'
+    
+    # Viết hoa chữ cái đầu
+    if title:
+        title = title[0].upper() + title[1:]
+    
+    return title
+
+
 # ============================================
 # HÀM HỖ TRỢ TẢI VIDEO
 # ============================================
