@@ -56,6 +56,12 @@
             transition: 0.2s;
         }
         .btn-get-voice:hover { background: #e07b30; }
+        .btn-srt {
+            padding: 12px 30px; background: #58a6ff; color: #fff; border: none;
+            border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer;
+            margin: 0; transition: 0.2s;
+        }
+        .btn-srt:hover { background: #4a94e8; }
     </style>
 </head>
 <body>
@@ -119,6 +125,10 @@
 </div>
 
 <script>
+// Biến toàn cục lưu SRT
+let currentSrtContent = '';
+let currentSrtFilename = 'subtitles.srt';
+
 // ===== LOAD VOICES =====
 async function loadVoices() {
     const sel = document.getElementById('voice');
@@ -260,6 +270,10 @@ async function uploadSTT() {
             throw new Error(data.error);
         }
 
+        // Lưu SRT content vào biến toàn cục
+        currentSrtContent = data.srt_content || '';
+        currentSrtFilename = 'subtitles.srt';
+
         // Hiển thị kết quả
         let html = '<div style="background:#161b22;padding:10px;border-radius:6px;margin-bottom:10px;border:1px solid #30363d;">';
         html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
@@ -288,6 +302,11 @@ async function uploadSTT() {
             html += '<div style="color:#8b949e;">Không có câu nào được nhận dạng.</div>';
         }
 
+        // Thêm nút tải SRT
+        html += '<div style="margin-top:15px;text-align:center;">';
+        html += '<button onclick="downloadSRT()" class="btn-srt">📥 Tải file SRT</button>';
+        html += '</div>';
+
         resultDiv.innerHTML = html;
         status.textContent = '✅ Nhận dạng thành công!';
     } catch (e) {
@@ -306,6 +325,41 @@ function sendToTTS() {
         document.getElementById('text').value = text.trim();
         // Cuộn lên phần TTS
         document.getElementById('text').scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+// ===== TẢI FILE SRT =====
+async function downloadSRT() {
+    if (!currentSrtContent) {
+        alert('Không có dữ liệu SRT');
+        return;
+    }
+    
+    try {
+        const resp = await fetch('/api/stt/download-srt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                srt_content: currentSrtContent,
+                filename: currentSrtFilename
+            })
+        });
+        
+        if (!resp.ok) {
+            throw new Error('HTTP ' + resp.status);
+        }
+        
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = currentSrtFilename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        alert('Lỗi tải SRT: ' + e.message);
     }
 }
 
