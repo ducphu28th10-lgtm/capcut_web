@@ -40,109 +40,35 @@ def get_voices():
 def generate_srt(utterances):
     """
     Tạo nội dung SRT từ danh sách utterances.
-    Mỗi TỪ ĐƠN là một dòng phụ đề riêng (one word at a time).
-    Tự tách cụm từ thành từng từ đơn và chia đều thời gian.
+    Mỗi từ là một dòng phụ đề riêng (one word at a time).
     """
     srt_lines = []
     index = 1
     
     for u in utterances:
-        # Nếu có words với timestamp, tách từng từ đơn trong mỗi word
+        # Nếu có words với timestamp, dùng từng từ
         if u.words and len(u.words) > 0:
             for w in u.words:
-                start_ms = int(w.start_time)
-                end_ms = int(w.end_time)
+                start = format_srt_time(w.start_time)
+                end = format_srt_time(w.end_time)
                 text = w.text.strip()
-                
-                if not text:
-                    continue
-                
-                # Tách text thành các từ đơn (split theo khoảng trắng)
-                single_words = text.split()
-                num_words = len(single_words)
-                
-                if num_words == 0:
-                    continue
-                
-                if num_words == 1:
-                    # Chỉ có 1 từ, giữ nguyên thời gian
+                if text:  # Bỏ qua từ rỗng
                     srt_lines.append(f"{index}")
-                    srt_lines.append(f"{format_srt_time(start_ms)} --> {format_srt_time(end_ms)}")
-                    srt_lines.append(single_words[0])
-                    srt_lines.append("")
+                    srt_lines.append(f"{start} --> {end}")
+                    srt_lines.append(text)
+                    srt_lines.append("")  # Dòng trống giữa các từ
                     index += 1
-                else:
-                    # Nhiều từ, chia đều thời gian theo tỷ lệ độ dài từ
-                    total_duration = end_ms - start_ms
-                    
-                    # Tính độ dài mỗi từ (dùng để chia thời gian theo tỷ lệ)
-                    word_lengths = [len(word) for word in single_words]
-                    total_length = sum(word_lengths)
-                    
-                    current_time = start_ms
-                    
-                    for i, word in enumerate(single_words):
-                        # Chia thời gian theo tỷ lệ độ dài từ
-                        word_duration = int(total_duration * word_lengths[i] / total_length)
-                        word_start = current_time
-                        word_end = current_time + word_duration
-                        
-                        # Đảm bảo từ cuối cùng kết thúc đúng end_ms
-                        if i == num_words - 1:
-                            word_end = end_ms
-                        
-                        srt_lines.append(f"{index}")
-                        srt_lines.append(f"{format_srt_time(word_start)} --> {format_srt_time(word_end)}")
-                        srt_lines.append(word)
-                        srt_lines.append("")
-                        index += 1
-                        
-                        current_time = word_end
         else:
-            # Nếu không có words, dùng cả câu và tách từng từ
-            start_ms = int(u.start_time)
-            end_ms = int(u.end_time)
+            # Nếu không có words, dùng cả câu
+            start = format_srt_time(u.start_time)
+            end = format_srt_time(u.end_time)
             text = u.text.strip()
-            
-            if not text:
-                continue
-            
-            single_words = text.split()
-            num_words = len(single_words)
-            
-            if num_words == 0:
-                continue
-            
-            if num_words == 1:
+            if text:
                 srt_lines.append(f"{index}")
-                srt_lines.append(f"{format_srt_time(start_ms)} --> {format_srt_time(end_ms)}")
-                srt_lines.append(single_words[0])
+                srt_lines.append(f"{start} --> {end}")
+                srt_lines.append(text)
                 srt_lines.append("")
                 index += 1
-            else:
-                total_duration = end_ms - start_ms
-                
-                # Tính độ dài mỗi từ
-                word_lengths = [len(word) for word in single_words]
-                total_length = sum(word_lengths)
-                
-                current_time = start_ms
-                
-                for i, word in enumerate(single_words):
-                    word_duration = int(total_duration * word_lengths[i] / total_length)
-                    word_start = current_time
-                    word_end = current_time + word_duration
-                    
-                    if i == num_words - 1:
-                        word_end = end_ms
-                    
-                    srt_lines.append(f"{index}")
-                    srt_lines.append(f"{format_srt_time(word_start)} --> {format_srt_time(word_end)}")
-                    srt_lines.append(word)
-                    srt_lines.append("")
-                    index += 1
-                    
-                    current_time = word_end
     
     return "\n".join(srt_lines)
 # ============================================
