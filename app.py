@@ -1,0 +1,191 @@
+import os
+import json
+import tempfile
+import threading
+import time
+import urllib.request
+from pathlib import Path
+from flask import Flask, request, jsonify, send_file, render_template
+from capcut_tts_api import CapCutClient
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'capcut-web-key'
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
+
+# Глобальный клиент (инициализируется при первом запросе)
+_client = None
+_voices_cache = None
+_voices_lock = threading.Lock()
+
+def get_client():
+    global _client
+    if _client is None:
+        _client = CapCutClient()
+    return _client
+
+def get_voices():
+    global _voices_cache
+    with _voices_lock:
+        if _voices_cache is None:
+            try:
+                _voices_cache = get_client().list_voices()
+            except Exception:
+                _voices_cache = []
+        return _voices_cache
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/api/voices')
+def api_voices():
+    lang = request.args.get('lang', '')
+    voices = get_voices()
+    if lang:
+        voices = [v for v in voices if v.lang.lower() == lang.lower()]
+    result = [{
+        'voice_type': v.voice_type,
+        'display_name': v.display_name,
+        'resource_id': v.resource_id,
+        'lang': v.lang,
+        'lan': v.lan,
+        'is_neural': 'Neural' in v.voice_type
+    } for v in voices]
+    return jsonify(result)
+
+@app.route('/api/tts', methods=['POST'])
+def api_tts():
+    data = request.get_json()
+    text = data.get('text', '')
+    voice = data.get('voice', 'BV074_streaming')
+    rate = data.get('rate', '1.0')
+    if not text:
+        return jsonify({'error': 'No text'}), 400
+
+    try:
+        # Используем edge-tts для Neural голосов
+        if 'Neural' in voice:
+            import asyncio
+            import edge_tts
+            tmp = tempfile.NamedTemporaryFile(suffix='.mp3', delete=False)
+            tmp.close()
+            try:
+                r = float(rate)
+            except:
+                r = 1.0
+            pct = int((r - 1.0) * 100)
+            rate_str = f"+{pct}%" if pct >= 0 else f"{pct}%"
+            async def gen():
+                comm = edge_tts.Communicate(text=text, voice=voice, rate=rate_str)
+                await comm.save(tmp.name)
+            asyncio.run(gen())
+            return send_file(tmp.name, as_attachment=True, download_name='tts_output.mp3')
+        else:
+            # CapCut API
+            client = get_client()
+            # Создаем задачу и ждем URL
+            create_res = client.create_tts_task(texts=text, voice=voice, rate=rate)
+            tasks = (create_res.get('data') or {}).get('tasks') or []
+            if not tasks:
+                return jsonify({'error': 'No task created'}), 500
+            task_id = tasks[0]['id']
+            token = tasks[0]['token']
+            # Poll до успеха
+            for _ in range(60):
+                time.sleep(2)
+                q = client.query_tts_task(task_id, token)
+                qtasks = (q.get('data') or {}).get('tasks') or []
+                if not qtasks:
+                    continue
+                status = qtasks[0].get('status', '')
+                if status in ('succeed', 'success', 'completed', 'done'):
+                    payload_raw = qtasks[0].get('payload', '{}')
+                    payload = json.loads(payload_raw) if isinstance(payload_raw, str) else payload_raw
+                    subs = payload.get('audio_subtitles') or []
+                    for sub in subs:
+                        url = sub.get('speech_url')
+                        if url:
+                            # Скачиваем MP3
+                            tmp = tempfile.NamedTemporaryFile(suffix='.mp3', delete=False)
+                            tmp.close()
+                            urllib.request.urlretrieve(url, tmp.name)
+                            return send_file(tmp.name, as_attachment=True, download_name='tts_output.mp3')
+                    return jsonify({'error': 'No audio URL'}), 500
+                elif status in ('failed', 'error', 'fail'):
+                    return jsonify({'error': f'Task failed: {status}'}), 500
+            return jsonify({'error': 'Timeout'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/stt/upload', methods=['POST'])
+def api_stt_upload():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'Empty filename'}), 400
+    tmp = tempfile.NamedTemporaryFile(suffix='.' + file.filename.split('.')[-1], delete=False)
+    tmp.close()
+    file.save(tmp.name)
+    lang = request.form.get('lang', 'vi-VN')
+    trans_lang = request.form.get('trans_lang', 'vi-VN')
+    use_trans = request.form.get('use_trans', 'false').lower() == 'true'
+
+    try:
+        client = get_client()
+        # Upload
+        upload = client.upload_audio(tmp.name)
+        # Create STT task
+        stt_res = client.create_stt_task(
+            audio_vid=upload.vid,
+            audio_md5=upload.md5,
+            duration_ms=upload.duration_ms or 10000,
+            language=lang,
+            translation_language=trans_lang,
+            use_translation=use_trans
+        )
+        tasks = (stt_res.get('data') or {}).get('tasks') or []
+        if not tasks:
+            return jsonify({'error': 'No STT task'}), 500
+        task_id = tasks[0]['id']
+        token = tasks[0]['token']
+        # Poll
+        for _ in range(90):
+            time.sleep(2)
+            q = client.query_stt_task(task_id, token)
+            qtasks = (q.get('data') or {}).get('tasks') or []
+            if not qtasks:
+                continue
+            status = qtasks[0].get('status', '')
+            if status in ('succeed', 'success', 'completed', 'done'):
+                subs = client.extract_subtitles(q)
+                result = {
+                    'full_text': subs.full_text,
+                    'utterances': [{
+                        'text': u.text,
+                        'start': u.start_time,
+                        'end': u.end_time,
+                        'words': [{'text': w.text, 'start': w.start_time, 'end': w.end_time} for w in u.words]
+                    } for u in subs.utterances]
+                }
+                os.unlink(tmp.name)
+                return jsonify(result)
+            elif status in ('failed', 'error', 'fail'):
+                os.unlink(tmp.name)
+                return jsonify({'error': f'STT failed: {status}'}), 500
+        os.unlink(tmp.name)
+        return jsonify({'error': 'STT timeout'}), 500
+    except Exception as e:
+        try:
+            os.unlink(tmp.name)
+        except:
+            pass
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/languages')
+def api_languages():
+    return jsonify(['vi-VN', 'zh-CN', 'en-US', 'ja-JP', 'ko-KR', 'fr-FR', 'de-DE', 'es-ES', 'th-TH', 'id-ID'])
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)

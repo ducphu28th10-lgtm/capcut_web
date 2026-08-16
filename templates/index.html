@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CapCut TTS/STT Web</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app">
+        <header>
+            <h1>🎙 CapCut TTS / STT Web</h1>
+            <span id="status">● Готов</span>
+        </header>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="tts">🔊 TTS</button>
+            <button class="tab" data-tab="stt">📝 STT</button>
+            <button class="tab" data-tab="voices">🎤 Голоса</button>
+        </div>
+
+        <!-- TTS TAB -->
+        <div id="tab-tts" class="tab-content active">
+            <div class="section">
+                <label>📝 Текст</label>
+                <textarea id="tts-text" rows="5">Xin chào! Đây là công cụ chuyển văn bản sang giọng nói.</textarea>
+            </div>
+            <div class="row">
+                <div class="section">
+                    <label>🎛 Голос</label>
+                    <select id="tts-voice"></select>
+                </div>
+                <div class="section">
+                    <label>⚡ Скорость</label>
+                    <input type="number" id="tts-rate" value="1.0" min="0.5" max="2.0" step="0.1">
+                </div>
+            </div>
+            <button id="tts-generate">▶ Сгенерировать</button>
+            <div id="tts-result"></div>
+            <audio id="tts-audio" controls style="display:none; width:100%; margin-top:12px;"></audio>
+        </div>
+
+        <!-- STT TAB -->
+        <div id="tab-stt" class="tab-content">
+            <div class="section">
+                <label>📁 Файл аудио/видео</label>
+                <input type="file" id="stt-file" accept=".mp3,.mp4,.m4a,.wav,.ogg,.flac,.aac">
+            </div>
+            <div class="row">
+                <div class="section">
+                    <label>🌐 Язык</label>
+                    <select id="stt-lang">
+                        <option value="vi-VN">Vietnamese</option>
+                        <option value="zh-CN">Chinese</option>
+                        <option value="en-US">English</option>
+                        <option value="ja-JP">Japanese</option>
+                        <option value="ko-KR">Korean</option>
+                        <option value="fr-FR">French</option>
+                        <option value="de-DE">German</option>
+                        <option value="es-ES">Spanish</option>
+                        <option value="th-TH">Thai</option>
+                        <option value="id-ID">Indonesian</option>
+                    </select>
+                </div>
+                <div class="section">
+                    <label>📖 Перевод</label>
+                    <select id="stt-trans-lang">
+                        <option value="vi-VN">Vietnamese</option>
+                        <option value="zh-CN">Chinese</option>
+                        <option value="en-US">English</option>
+                        <option value="ja-JP">Japanese</option>
+                        <option value="ko-KR">Korean</option>
+                        <option value="fr-FR">French</option>
+                        <option value="de-DE">German</option>
+                        <option value="es-ES">Spanish</option>
+                    </select>
+                </div>
+                <div class="section" style="justify-content:center;">
+                    <label>
+                        <input type="checkbox" id="stt-use-trans"> Включить перевод
+                    </label>
+                </div>
+            </div>
+            <button id="stt-transcribe">▶ Распознать</button>
+            <div id="stt-result"></div>
+        </div>
+
+        <!-- VOICES TAB -->
+        <div id="tab-voices" class="tab-content">
+            <div class="row">
+                <div class="section">
+                    <label>🔍 Фильтр по языку</label>
+                    <select id="voice-lang-filter">
+                        <option value="">Все</option>
+                    </select>
+                </div>
+                <div class="section">
+                    <input type="text" id="voice-search" placeholder="Поиск..." style="width:100%;">
+                </div>
+            </div>
+            <div id="voice-table-wrap">
+                <table id="voice-table">
+                    <thead>
+                        <tr><th>Название</th><th>Voice Type</th><th>Lang</th></tr>
+                    </thead>
+                    <tbody id="voice-body"></tbody>
+                </table>
+            </div>
+            <div style="margin-top:8px; color:var(--fg2); font-size:0.85rem;" id="voice-count"></div>
+        </div>
+    </div>
+    <script src="/static/script.js"></script>
+</body>
+</html>
