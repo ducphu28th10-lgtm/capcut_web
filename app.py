@@ -4,11 +4,8 @@ import tempfile
 import threading
 import time
 import urllib.request
-import re
-import json
-from datetime import datetime
-from urllib.parse import unquote
 from pathlib import Path
+from datetime import datetime
 from flask import Flask, request, jsonify, send_file, render_template
 from capcut_tts_api import CapCutClient
 
@@ -16,89 +13,10 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'capcut-web-key'
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
 
-# Глобальный клиент (инициализируется при первом запросе)
+# Global client
 _client = None
 _voices_cache = None
 _voices_lock = threading.Lock()
-
-def extract_clean_url(messy_string):
-    """
-    Trích xuất URL sạch từ chuỗi bất kỳ.
-    """
-    decoded = unquote(messy_string)
-    raw_urls = re.findall(r'https?://[^\s<>"\'()\[\]{}]+', decoded)
-    if not raw_urls:
-        raw_urls = re.findall(r'https?://[^\s<>"\'()\[\]{}]+', messy_string)
-        if not raw_urls:
-            return None
-    url = raw_urls[0].strip('.,;:!?')
-    return url
-
-def get_video_info(clean_url):
-    """
-    Gọi API GenDownload.
-    """
-    api_url = "https://gendownload.com/api/extract"
-    headers = {"Content-Type": "application/json"}
-    payload = {"url": clean_url}
-    
-    response = requests.post(api_url, json=payload, headers=headers, timeout=30)
-    if response.status_code != 200:
-        return {"error": f"API lỗi: {response.status_code}"}
-    return response.json()
-
-def download_video_from_format(format_url, filename):
-    """
-    Tải video.
-    """
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://gendownload.com/'
-    }
-    
-    response = requests.get(format_url, headers=headers, stream=True, timeout=60)
-    if response.status_code != 200:
-        return {"error": f"Tải thất bại: {response.status_code}"}
-    
-    total_size = int(response.headers.get('content-length', 0))
-    downloaded = 0
-    
-    with open(filename, 'wb') as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            if chunk:
-                f.write(chunk)
-                downloaded += len(chunk)
-    
-    return {"status": "success", "filename": filename, "size": downloaded}
-
-def generate_filename(ext="mp4"):
-    """
-    Tạo tên file CHỈ theo định dạng ngày-tháng-STT.
-    """
-    now = datetime.now()
-    day = f"{now.day:02d}"
-    month = f"{now.month:02d}"
-    
-    pattern = f"^{day}-{month}-(\\d+)\\."
-    downloads_dir = 'downloads'
-    
-    if not os.path.exists(downloads_dir):
-        os.makedirs(downloads_dir)
-    
-    existing_files = [f for f in os.listdir(downloads_dir) if re.match(pattern, f)]
-    
-    max_num = 0
-    for f in existing_files:
-        match = re.search(pattern, f)
-        if match:
-            num = int(match.group(1))
-            if num > max_num:
-                max_num = num
-    
-    video_num = max_num + 1
-    
-    filename = f"{day}-{month}-{video_num}.{ext}"
-    return filename
 
 def get_client():
     global _client
@@ -115,6 +33,38 @@ def get_voices():
             except Exception:
                 _voices_cache = []
         return _voices_cache
+
+def generate_filename(ext="mp3"):
+    """
+    Tạo tên file theo định dạng DD-MM-STT.extension
+    Tự động tăng STT theo số file đã tồn tại trong ngày
+    """
+    now = datetime.now()
+    day = f"{now.day:02d}"
+    month = f"{now.month:02d}"
+    
+    # Tìm số thứ tự cao nhất hiện có trong ngày
+    pattern = f"^{day}-{month}-(\\d+)\\."
+    existing_files = [f for f in os.listdir('.') if re.match(pattern, f)]
+    
+    max_num = 0
+    for f in existing_files:
+        match = re.search(pattern, f)
+        if match:
+            num = int(match.group(1))
+            if num > max_num:
+                max_num = num
+    
+    video_num = max_num + 1
+    filename = f"{day}-{month}-{video_num}.{ext}"
+    
+    # Phòng trường hợp trùng
+    counter = 0
+    while os.path.exists(filename):
+        counter += 1
+        filename = f"{day}-{month}-{video_num}_{counter}.{ext}"
+    
+    return filename
 
 @app.route('/')
 def index():
@@ -146,7 +96,7 @@ def api_tts():
         return jsonify({'error': 'No text'}), 400
 
     try:
-        # Используем edge-tts для Neural голосов
+        # Neural voices via edge-tts
         if 'Neural' in voice:
             import asyncio
             import edge_tts
@@ -162,18 +112,21 @@ def api_tts():
                 comm = edge_tts.Communicate(text=text, voice=voice, rate=rate_str)
                 await comm.save(tmp.name)
             asyncio.run(gen())
-            return send_file(tmp.name, as_attachment=True, download_name='tts_output.mp3')
+            # Tạo tên file theo định dạng DD-MM-STT.mp3
+            filename = generate_filename("mp3")
+            # Đổi tên file tạm thành tên đúng định dạng
+            os.rename(tmp.name, filename)
+            return send_file(filename, as_attachment=True, download_name=filename)
         else:
             # CapCut API
             client = get_client()
-            # Создаем задачу и ждем URL
             create_res = client.create_tts_task(texts=text, voice=voice, rate=rate)
             tasks = (create_res.get('data') or {}).get('tasks') or []
             if not tasks:
                 return jsonify({'error': 'No task created'}), 500
             task_id = tasks[0]['id']
             token = tasks[0]['token']
-            # Poll до успеха
+            # Poll until success
             for _ in range(60):
                 time.sleep(2)
                 q = client.query_tts_task(task_id, token)
@@ -188,11 +141,10 @@ def api_tts():
                     for sub in subs:
                         url = sub.get('speech_url')
                         if url:
-                            # Скачиваем MP3
-                            tmp = tempfile.NamedTemporaryFile(suffix='.mp3', delete=False)
-                            tmp.close()
-                            urllib.request.urlretrieve(url, tmp.name)
-                            return send_file(tmp.name, as_attachment=True, download_name='tts_output.mp3')
+                            # Tạo tên file theo định dạng DD-MM-STT.mp3
+                            filename = generate_filename("mp3")
+                            urllib.request.urlretrieve(url, filename)
+                            return send_file(filename, as_attachment=True, download_name=filename)
                     return jsonify({'error': 'No audio URL'}), 500
                 elif status in ('failed', 'error', 'fail'):
                     return jsonify({'error': f'Task failed: {status}'}), 500
@@ -216,9 +168,7 @@ def api_stt_upload():
 
     try:
         client = get_client()
-        # Upload
         upload = client.upload_audio(tmp.name)
-        # Create STT task
         stt_res = client.create_stt_task(
             audio_vid=upload.vid,
             audio_md5=upload.md5,
@@ -232,7 +182,6 @@ def api_stt_upload():
             return jsonify({'error': 'No STT task'}), 500
         task_id = tasks[0]['id']
         token = tasks[0]['token']
-        # Poll
         for _ in range(90):
             time.sleep(2)
             q = client.query_stt_task(task_id, token)
@@ -268,90 +217,6 @@ def api_stt_upload():
 @app.route('/api/languages')
 def api_languages():
     return jsonify(['vi-VN', 'zh-CN', 'en-US', 'ja-JP', 'ko-KR', 'fr-FR', 'de-DE', 'es-ES', 'th-TH', 'id-ID'])
-
-# ============================================
-# TAB TẢI VIDEO
-# ============================================
-@app.route('/download-video', methods=['GET', 'POST'])
-def download_video():
-    if request.method == 'POST':
-        video_url = request.form.get('video_url', '').strip()
-        quality = request.form.get('quality', 'best').strip()
-        
-        if not video_url:
-            return render_template('download_video.html', error="Vui lòng nhập link video")
-        
-        # Trích xuất URL sạch
-        clean_url = extract_clean_url(video_url)
-        if not clean_url:
-            return render_template('download_video.html', error="Không tìm thấy URL hợp lệ")
-        
-        # Gọi API
-        video_data = get_video_info(clean_url)
-        if "error" in video_data:
-            return render_template('download_video.html', error=video_data['error'])
-        
-        # Chọn format
-        formats = video_data.get('formats', [])
-        if not formats:
-            return render_template('download_video.html', error="Không có format")
-        
-        selected_format = None
-        if quality == "audio":
-            for fmt in formats:
-                if fmt.get('type') == 'audio':
-                    selected_format = fmt
-                    break
-        elif quality.isdigit():
-            target = int(quality)
-            for fmt in formats:
-                if fmt.get('type') == 'video':
-                    label = fmt.get('label', '')
-                    if 'p' in label:
-                        try:
-                            h = int(label.replace('p', ''))
-                            if h <= target:
-                                selected_format = fmt
-                                break
-                        except:
-                            pass
-            if not selected_format:
-                selected_format = formats[0]
-        else:
-            for fmt in formats:
-                if fmt.get('type') == 'video':
-                    selected_format = fmt
-                    break
-            if not selected_format:
-                selected_format = formats[0]
-        
-        if not selected_format:
-            return render_template('download_video.html', error="Không tìm thấy format")
-        
-        # Lấy URL tải
-        format_url = selected_format.get('url')
-        if not format_url:
-            return render_template('download_video.html', error="Không có URL tải")
-        
-        # Tạo thư mục downloads nếu chưa có
-        if not os.path.exists('downloads'):
-            os.makedirs('downloads')
-        
-        # Tạo tên file
-        ext = selected_format.get('ext', 'mp4')
-        filename = generate_filename(ext)
-        filepath = os.path.join('downloads', filename)
-        
-        # Tải video
-        result = download_video_from_format(format_url, filepath)
-        
-        if "error" in result:
-            return render_template('download_video.html', error=result['error'])
-        
-        # Trả về file tải xuống
-        return send_from_directory('downloads', filename, as_attachment=True)
-    
-    return render_template('download_video.html')
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
