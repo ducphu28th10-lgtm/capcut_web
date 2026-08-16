@@ -37,54 +37,11 @@ def get_voices():
                 _voices_cache = []
         return _voices_cache
 
-def generate_filename(ext="mp3"):
-    """
-    Tạo tên file theo định dạng DD-MM-STT.extension
-    Tự động tăng STT theo số file đã tồn tại trong ngày
-    """
-    now = datetime.now()
-    day = f"{now.day:02d}"
-    month = f"{now.month:02d}"
-    
-    # Tìm số thứ tự cao nhất hiện có trong ngày
-    pattern = f"^{day}-{month}-(\\d+)\\."
-    existing_files = [f for f in os.listdir('.') if re.match(pattern, f)]
-    
-    max_num = 0
-    for f in existing_files:
-        match = re.search(pattern, f)
-        if match:
-            num = int(match.group(1))
-            if num > max_num:
-                max_num = num
-    
-    video_num = max_num + 1
-    filename = f"{day}-{month}-{video_num}.{ext}"
-    
-    # Phòng trường hợp trùng
-    counter = 0
-    while os.path.exists(filename):
-        counter += 1
-        filename = f"{day}-{month}-{video_num}_{counter}.{ext}"
-    
-    return filename
-
-def format_srt_time(ms):
-    """
-    Chuyển milliseconds sang định dạng SRT: HH:MM:SS,mmm
-    """
-    ms = int(ms)
-    hours = ms // 3600000
-    minutes = (ms % 3600000) // 60000
-    seconds = (ms % 60000) // 1000
-    millis = ms % 1000
-    return f"{hours:02d}:{minutes:02d}:{seconds:02d},{millis:03d}"
-
 def generate_srt(utterances):
     """
     Tạo nội dung SRT từ danh sách utterances.
     Mỗi TỪ ĐƠN là một dòng phụ đề riêng (one word at a time).
-    Tự tách cụm từ thành từng từ và chia đều thời gian.
+    Tự tách cụm từ thành từng từ đơn và chia đều thời gian.
     """
     srt_lines = []
     index = 1
@@ -93,8 +50,8 @@ def generate_srt(utterances):
         # Nếu có words với timestamp, tách từng từ đơn trong mỗi word
         if u.words and len(u.words) > 0:
             for w in u.words:
-                start_ms = w.start_time
-                end_ms = w.end_time
+                start_ms = int(w.start_time)
+                end_ms = int(w.end_time)
                 text = w.text.strip()
                 
                 if not text:
@@ -115,13 +72,20 @@ def generate_srt(utterances):
                     srt_lines.append("")
                     index += 1
                 else:
-                    # Nhiều từ, chia đều thời gian
+                    # Nhiều từ, chia đều thời gian theo tỷ lệ độ dài từ
                     total_duration = end_ms - start_ms
-                    duration_per_word = total_duration / num_words
+                    
+                    # Tính độ dài mỗi từ (dùng để chia thời gian theo tỷ lệ)
+                    word_lengths = [len(word) for word in single_words]
+                    total_length = sum(word_lengths)
+                    
+                    current_time = start_ms
                     
                     for i, word in enumerate(single_words):
-                        word_start = int(start_ms + (i * duration_per_word))
-                        word_end = int(start_ms + ((i + 1) * duration_per_word))
+                        # Chia thời gian theo tỷ lệ độ dài từ
+                        word_duration = int(total_duration * word_lengths[i] / total_length)
+                        word_start = current_time
+                        word_end = current_time + word_duration
                         
                         # Đảm bảo từ cuối cùng kết thúc đúng end_ms
                         if i == num_words - 1:
@@ -132,10 +96,12 @@ def generate_srt(utterances):
                         srt_lines.append(word)
                         srt_lines.append("")
                         index += 1
+                        
+                        current_time = word_end
         else:
             # Nếu không có words, dùng cả câu và tách từng từ
-            start_ms = u.start_time
-            end_ms = u.end_time
+            start_ms = int(u.start_time)
+            end_ms = int(u.end_time)
             text = u.text.strip()
             
             if not text:
@@ -155,11 +121,17 @@ def generate_srt(utterances):
                 index += 1
             else:
                 total_duration = end_ms - start_ms
-                duration_per_word = total_duration / num_words
+                
+                # Tính độ dài mỗi từ
+                word_lengths = [len(word) for word in single_words]
+                total_length = sum(word_lengths)
+                
+                current_time = start_ms
                 
                 for i, word in enumerate(single_words):
-                    word_start = int(start_ms + (i * duration_per_word))
-                    word_end = int(start_ms + ((i + 1) * duration_per_word))
+                    word_duration = int(total_duration * word_lengths[i] / total_length)
+                    word_start = current_time
+                    word_end = current_time + word_duration
                     
                     if i == num_words - 1:
                         word_end = end_ms
@@ -169,9 +141,10 @@ def generate_srt(utterances):
                     srt_lines.append(word)
                     srt_lines.append("")
                     index += 1
+                    
+                    current_time = word_end
     
     return "\n".join(srt_lines)
-
 # ============================================
 # HÀM HỖ TRỢ TẢI VIDEO
 # ============================================
