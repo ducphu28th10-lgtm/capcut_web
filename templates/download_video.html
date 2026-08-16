@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tải Video</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #0f0f0f;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: #1a1a1a;
+            padding: 40px;
+            border-radius: 10px;
+            width: 500px;
+            text-align: center;
+            border: 1px solid #333;
+        }
+        h1 {
+            color: #00ff00;
+            margin-bottom: 30px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: #0f0f0f;
+            border: 1px solid #333;
+            color: #fff;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        select {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: #0f0f0f;
+            border: 1px solid #333;
+            color: #fff;
+            border-radius: 5px;
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            background: #00ff00;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #00cc00;
+        }
+        .error {
+            color: #ff4444;
+            margin: 10px 0;
+        }
+        .success {
+            color: #00ff00;
+            margin: 10px 0;
+        }
+        .loading {
+            display: none;
+            color: #ffff00;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 TẢI VIDEO</h1>
+        
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+        
+        <form method="POST" action="/download-video" onsubmit="showLoading()">
+            <input type="text" name="video_url" placeholder="Nhập link video..." required>
+            
+            <select name="quality">
+                <option value="best">Chất lượng tốt nhất</option>
+                <option value="720">720p</option>
+                <option value="1080">1080p</option>
+                <option value="audio">Chỉ âm thanh (MP3)</option>
+            </select>
+            
+            <button type="submit">⬇️ TẢI VIDEO</button>
+        </form>
+        
+        <div class="loading" id="loading">
+            🔄 Đang xử lý... Vui lòng đợi...
+        </div>
+    </div>
+    
+    <script>
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
