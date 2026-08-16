@@ -186,6 +186,90 @@ def api_stt_upload():
 def api_languages():
     return jsonify(['vi-VN', 'zh-CN', 'en-US', 'ja-JP', 'ko-KR', 'fr-FR', 'de-DE', 'es-ES', 'th-TH', 'id-ID'])
 
+# ============================================
+# TAB TẢI VIDEO
+# ============================================
+@app.route('/download-video', methods=['GET', 'POST'])
+def download_video():
+    if request.method == 'POST':
+        video_url = request.form.get('video_url', '').strip()
+        quality = request.form.get('quality', 'best').strip()
+        
+        if not video_url:
+            return render_template('download_video.html', error="Vui lòng nhập link video")
+        
+        # Trích xuất URL sạch
+        clean_url = extract_clean_url(video_url)
+        if not clean_url:
+            return render_template('download_video.html', error="Không tìm thấy URL hợp lệ")
+        
+        # Gọi API
+        video_data = get_video_info(clean_url)
+        if "error" in video_data:
+            return render_template('download_video.html', error=video_data['error'])
+        
+        # Chọn format
+        formats = video_data.get('formats', [])
+        if not formats:
+            return render_template('download_video.html', error="Không có format")
+        
+        selected_format = None
+        if quality == "audio":
+            for fmt in formats:
+                if fmt.get('type') == 'audio':
+                    selected_format = fmt
+                    break
+        elif quality.isdigit():
+            target = int(quality)
+            for fmt in formats:
+                if fmt.get('type') == 'video':
+                    label = fmt.get('label', '')
+                    if 'p' in label:
+                        try:
+                            h = int(label.replace('p', ''))
+                            if h <= target:
+                                selected_format = fmt
+                                break
+                        except:
+                            pass
+            if not selected_format:
+                selected_format = formats[0]
+        else:
+            for fmt in formats:
+                if fmt.get('type') == 'video':
+                    selected_format = fmt
+                    break
+            if not selected_format:
+                selected_format = formats[0]
+        
+        if not selected_format:
+            return render_template('download_video.html', error="Không tìm thấy format")
+        
+        # Lấy URL tải
+        format_url = selected_format.get('url')
+        if not format_url:
+            return render_template('download_video.html', error="Không có URL tải")
+        
+        # Tạo thư mục downloads nếu chưa có
+        if not os.path.exists('downloads'):
+            os.makedirs('downloads')
+        
+        # Tạo tên file
+        ext = selected_format.get('ext', 'mp4')
+        filename = generate_filename(ext)
+        filepath = os.path.join('downloads', filename)
+        
+        # Tải video
+        result = download_video_from_format(format_url, filepath)
+        
+        if "error" in result:
+            return render_template('download_video.html', error=result['error'])
+        
+        # Trả về file tải xuống
+        return send_from_directory('downloads', filename, as_attachment=True)
+    
+    return render_template('download_video.html')
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
