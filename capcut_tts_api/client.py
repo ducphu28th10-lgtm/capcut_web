@@ -1,6 +1,3 @@
-"""
-High-level Python API Client for CapCut Text-to-Speech (TTS) and Speech-to-Text (STT) tasks.
-"""
 
 import json
 import time
