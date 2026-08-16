@@ -1,114 +1,304 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CapCut TTS/STT Web</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>CapCut TTS & STT Web Tool</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0d1117; color: #e6edf3; padding: 30px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { color: #58a6ff; margin-bottom: 30px; border-bottom: 1px solid #30363d; padding-bottom: 15px; }
+        h2 { color: #f0883e; margin: 25px 0 15px; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 25px; margin-bottom: 25px; }
+        label { display: block; margin: 10px 0 5px; font-weight: 600; color: #8b949e; }
+        textarea, select, input[type="text"] { 
+            width: 100%; padding: 10px; background: #0d1117; color: #e6edf3; 
+            border: 1px solid #30363d; border-radius: 6px; font-size: 14px;
+        }
+        textarea { height: 120px; resize: vertical; }
+        select { height: 45px; }
+        button { 
+            padding: 12px 30px; background: #238636; color: #fff; border: none; 
+            border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer;
+            margin: 15px 10px 0 0; transition: 0.2s;
+        }
+        button:hover { background: #2ea043; }
+        button.danger { background: #da3633; }
+        button.danger:hover { background: #f85149; }
+        .row { display: flex; gap: 15px; flex-wrap: wrap; align-items: center; }
+        .row label { margin: 0; }
+        input[type="range"] { width: 150px; accent-color: #58a6ff; }
+        #rate_val { font-weight: 700; color: #58a6ff; min-width: 40px; display: inline-block; }
+        audio { width: 100%; margin-top: 15px; border-radius: 6px; }
+        #stt_result { 
+            background: #0d1117; padding: 15px; border-radius: 6px; 
+            max-height: 400px; overflow-y: auto; white-space: pre-wrap;
+            font-size: 14px; line-height: 1.6; margin-top: 15px;
+            border: 1px solid #30363d;
+        }
+        #stt_result .utt { border-bottom: 1px solid #21262d; padding: 8px 0; }
+        #stt_result .time { color: #8b949e; font-size: 12px; }
+        .spinner { display: none; width: 20px; height: 20px; border: 3px solid #30363d; border-top-color: #58a6ff; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 15px; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .status { display: inline-block; margin-left: 15px; color: #f0883e; font-style: italic; }
+        .file-input-wrapper { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .file-input-wrapper input[type="file"] { color: #8b949e; padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; flex: 1; }
+    </style>
 </head>
 <body>
-    <div class="app">
-        <header>
-            <h1>🎙 CapCut TTS / STT Web</h1>
-            <span id="status">● Готов</span>
-        </header>
+<div class="container">
+    <h1>🎙️ CapCut TTS & STT Web Tool</h1>
 
-        <div class="tabs">
-            <button class="tab active" data-tab="tts">🔊 TTS</button>
-            <button class="tab" data-tab="stt">📝 STT</button>
-            <button class="tab" data-tab="voices">🎤 Голоса</button>
+    <!-- TTS SECTION -->
+    <div class="card">
+        <h2>📢 Text-to-Speech (TTS)</h2>
+        <label>Nhập văn bản:</label>
+        <textarea id="text">Xin chào, đây là giọng nói tổng hợp từ CapCut.</textarea>
+        
+        <label>Chọn giọng đọc:</label>
+        <select id="voice">
+            <option value="">Đang tải danh sách giọng...</option>
+        </select>
+        
+        <div class="row" style="margin-top: 10px;">
+            <label>Tốc độ:</label>
+            <input type="range" id="rate" min="0.5" max="2.0" step="0.1" value="1.0">
+            <span id="rate_val">1.0</span>
         </div>
-
-        <!-- TTS TAB -->
-        <div id="tab-tts" class="tab-content active">
-            <div class="section">
-                <label>📝 Текст</label>
-                <textarea id="tts-text" rows="5">Xin chào! Đây là công cụ chuyển văn bản sang giọng nói.</textarea>
-            </div>
-            <div class="row">
-                <div class="section">
-                    <label>🎛 Голос</label>
-                    <select id="tts-voice"></select>
-                </div>
-                <div class="section">
-                    <label>⚡ Скорость</label>
-                    <input type="number" id="tts-rate" value="1.0" min="0.5" max="2.0" step="0.1">
-                </div>
-            </div>
-            <button id="tts-generate">▶ Сгенерировать</button>
-            <div id="tts-result"></div>
-            <audio id="tts-audio" controls style="display:none; width:100%; margin-top:12px;"></audio>
+        
+        <div>
+            <button onclick="generateTTS()">🎵 Tạo TTS</button>
+            <span class="spinner" id="tts_spinner"></span>
+            <span class="status" id="tts_status"></span>
         </div>
-
-        <!-- STT TAB -->
-        <div id="tab-stt" class="tab-content">
-            <div class="section">
-                <label>📁 Файл аудио/видео</label>
-                <input type="file" id="stt-file" accept=".mp3,.mp4,.m4a,.wav,.ogg,.flac,.aac">
-            </div>
-            <div class="row">
-                <div class="section">
-                    <label>🌐 Язык</label>
-                    <select id="stt-lang">
-                        <option value="vi-VN">Vietnamese</option>
-                        <option value="zh-CN">Chinese</option>
-                        <option value="en-US">English</option>
-                        <option value="ja-JP">Japanese</option>
-                        <option value="ko-KR">Korean</option>
-                        <option value="fr-FR">French</option>
-                        <option value="de-DE">German</option>
-                        <option value="es-ES">Spanish</option>
-                        <option value="th-TH">Thai</option>
-                        <option value="id-ID">Indonesian</option>
-                    </select>
-                </div>
-                <div class="section">
-                    <label>📖 Перевод</label>
-                    <select id="stt-trans-lang">
-                        <option value="vi-VN">Vietnamese</option>
-                        <option value="zh-CN">Chinese</option>
-                        <option value="en-US">English</option>
-                        <option value="ja-JP">Japanese</option>
-                        <option value="ko-KR">Korean</option>
-                        <option value="fr-FR">French</option>
-                        <option value="de-DE">German</option>
-                        <option value="es-ES">Spanish</option>
-                    </select>
-                </div>
-                <div class="section" style="justify-content:center;">
-                    <label>
-                        <input type="checkbox" id="stt-use-trans"> Включить перевод
-                    </label>
-                </div>
-            </div>
-            <button id="stt-transcribe">▶ Распознать</button>
-            <div id="stt-result"></div>
-        </div>
-
-        <!-- VOICES TAB -->
-        <div id="tab-voices" class="tab-content">
-            <div class="row">
-                <div class="section">
-                    <label>🔍 Фильтр по языку</label>
-                    <select id="voice-lang-filter">
-                        <option value="">Все</option>
-                    </select>
-                </div>
-                <div class="section">
-                    <input type="text" id="voice-search" placeholder="Поиск..." style="width:100%;">
-                </div>
-            </div>
-            <div id="voice-table-wrap">
-                <table id="voice-table">
-                    <thead>
-                        <tr><th>Название</th><th>Voice Type</th><th>Lang</th></tr>
-                    </thead>
-                    <tbody id="voice-body"></tbody>
-                </table>
-            </div>
-            <div style="margin-top:8px; color:var(--fg2); font-size:0.85rem;" id="voice-count"></div>
-        </div>
+        
+        <audio id="audio" controls style="display:none; margin-top:15px;"></audio>
+        <div id="tts_error" style="color:#f85149; margin-top:10px;"></div>
     </div>
-    <script src="/static/script.js"></script>
+
+    <!-- STT SECTION -->
+    <div class="card">
+        <h2>🎤 Speech-to-Text (STT) - Nhận dạng giọng nói</h2>
+        <div class="file-input-wrapper">
+            <input type="file" id="file_input" accept="audio/*,video/*">
+            <button onclick="uploadSTT()" class="danger">📝 Nhận dạng</button>
+            <span class="spinner" id="stt_spinner"></span>
+            <span class="status" id="stt_status"></span>
+        </div>
+        <label style="margin-top:10px;">Ngôn ngữ nguồn:</label>
+        <select id="stt_lang">
+            <option value="vi-VN">Tiếng Việt</option>
+            <option value="zh-CN">Tiếng Trung</option>
+            <option value="en-US">Tiếng Anh</option>
+            <option value="ja-JP">Tiếng Nhật</option>
+            <option value="th-TH">Tiếng Thái</option>
+            <option value="id-ID">Tiếng Indonesia</option>
+            <option value="fr-FR">Tiếng Pháp</option>
+            <option value="de-DE">Tiếng Đức</option>
+            <option value="es-ES">Tiếng Tây Ban Nha</option>
+            <option value="pt-BR">Tiếng Bồ Đào Nha</option>
+        </select>
+        <div id="stt_result"></div>
+        <div id="stt_error" style="color:#f85149; margin-top:10px;"></div>
+    </div>
+</div>
+
+<script>
+// ===== LOAD VOICES =====
+async function loadVoices() {
+    const sel = document.getElementById('voice');
+    sel.innerHTML = '<option value="">Đang tải...</option>';
+    try {
+        const resp = await fetch('/api/voices');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const voices = await resp.json();
+        sel.innerHTML = '';
+        // Nhóm theo ngôn ngữ
+        const groups = {};
+        for (const v of voices) {
+            const key = v.lang || 'unknown';
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(v);
+        }
+        // Sắp xếp theo ngôn ngữ
+        const sortedLangs = Object.keys(groups).sort();
+        for (const lang of sortedLangs) {
+            const optGroup = document.createElement('optgroup');
+            optGroup.label = lang;
+            // Sắp xếp giọng theo tên hiển thị
+            groups[lang].sort((a,b) => a.display_name.localeCompare(b.display_name));
+            for (const v of groups[lang]) {
+                const opt = document.createElement('option');
+                opt.value = v.voice_type;
+                opt.textContent = v.display_name + (v.is_neural ? ' 🧠' : '');
+                optGroup.appendChild(opt);
+            }
+            sel.appendChild(optGroup);
+        }
+        if (voices.length === 0) {
+            sel.innerHTML = '<option value="">Không có giọng nào</option>';
+        }
+    } catch (e) {
+        sel.innerHTML = '<option value="">Lỗi tải voice: ' + e.message + '</option>';
+        console.error(e);
+    }
+}
+
+// ===== TTS =====
+document.getElementById('rate').oninput = function() {
+    document.getElementById('rate_val').textContent = this.value;
+};
+
+async function generateTTS() {
+    const text = document.getElementById('text').value.trim();
+    const voice = document.getElementById('voice').value;
+    const rate = document.getElementById('rate').value;
+    const status = document.getElementById('tts_status');
+    const spinner = document.getElementById('tts_spinner');
+    const error = document.getElementById('tts_error');
+    const audio = document.getElementById('audio');
+
+    error.textContent = '';
+    status.textContent = '';
+    audio.style.display = 'none';
+    audio.src = '';
+
+    if (!text) {
+        error.textContent = '⚠️ Vui lòng nhập văn bản.';
+        return;
+    }
+    if (!voice) {
+        error.textContent = '⚠️ Vui lòng chọn giọng đọc.';
+        return;
+    }
+
+    spinner.style.display = 'inline-block';
+    status.textContent = 'Đang tạo TTS...';
+
+    try {
+        const resp = await fetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, voice, rate: parseFloat(rate) })
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json();
+            throw new Error(err.error || 'Lỗi HTTP ' + resp.status);
+        }
+
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        audio.src = url;
+        audio.style.display = 'block';
+        audio.play();
+        status.textContent = '✅ Thành công!';
+    } catch (e) {
+        error.textContent = '❌ Lỗi: ' + e.message;
+        status.textContent = '❌ Thất bại';
+    } finally {
+        spinner.style.display = 'none';
+    }
+}
+
+// ===== STT =====
+async function uploadSTT() {
+    const fileInput = document.getElementById('file_input');
+    const file = fileInput.files[0];
+    const lang = document.getElementById('stt_lang').value;
+    const status = document.getElementById('stt_status');
+    const spinner = document.getElementById('stt_spinner');
+    const error = document.getElementById('stt_error');
+    const resultDiv = document.getElementById('stt_result');
+
+    error.textContent = '';
+    status.textContent = '';
+    resultDiv.innerHTML = '';
+
+    if (!file) {
+        error.textContent = '⚠️ Vui lòng chọn file audio/video.';
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('lang', lang);
+    formData.append('trans_lang', lang);
+    formData.append('use_trans', 'false');
+
+    spinner.style.display = 'inline-block';
+    status.textContent = 'Đang upload và nhận dạng...';
+
+    try {
+        const resp = await fetch('/api/stt/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json();
+            throw new Error(err.error || 'Lỗi HTTP ' + resp.status);
+        }
+
+        const data = await resp.json();
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        // Hiển thị kết quả
+        let html = '<div style="background:#161b22;padding:10px;border-radius:6px;margin-bottom:10px;border:1px solid #30363d;">';
+        html += '<strong>📝 Toàn bộ văn bản:</strong><br>';
+        html += '<div style="padding:10px;background:#0d1117;border-radius:4px;margin:8px 0;">' + escapeHtml(data.full_text || '') + '</div>';
+        html += '</div>';
+
+        if (data.utterances && data.utterances.length > 0) {
+            html += '<strong>📄 Chi tiết từng câu:</strong>';
+            for (const u of data.utterances) {
+                html += '<div class="utt">';
+                html += '<span class="time">[' + msToTime(u.start) + ' → ' + msToTime(u.end) + ']</span> ';
+                html += '<span style="font-weight:500;">' + escapeHtml(u.text) + '</span>';
+                if (u.words && u.words.length > 0) {
+                    html += '<br><span style="color:#8b949e;font-size:12px;">';
+                    for (const w of u.words) {
+                        html += '[' + msToTime(w.start) + '] <strong>' + escapeHtml(w.text) + '</strong> ';
+                    }
+                    html += '</span>';
+                }
+                html += '</div>';
+            }
+        } else {
+            html += '<div style="color:#8b949e;">Không có câu nào được nhận dạng.</div>';
+        }
+
+        resultDiv.innerHTML = html;
+        status.textContent = '✅ Nhận dạng thành công!';
+    } catch (e) {
+        error.textContent = '❌ Lỗi: ' + e.message;
+        status.textContent = '❌ Thất bại';
+    } finally {
+        spinner.style.display = 'none';
+    }
+}
+
+// ===== UTILITY =====
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function msToTime(ms) {
+    if (!ms) return '0:00';
+    const totalSec = Math.floor(ms / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return min + ':' + String(sec).padStart(2, '0');
+}
+
+// ===== LOAD =====
+loadVoices();
+</script>
 </body>
 </html>
