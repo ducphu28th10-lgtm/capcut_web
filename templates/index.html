@@ -62,6 +62,16 @@
             margin: 0; transition: 0.2s;
         }
         .btn-srt:hover { background: #4a94e8; }
+        .title-box {
+            background: #1a2b1a; padding: 15px; border-radius: 6px; margin-bottom: 10px;
+            border: 2px solid #238636;
+        }
+        .title-label {
+            font-size: 14px; font-weight: 600; color: #238636; margin-bottom: 5px;
+        }
+        .title-text {
+            font-size: 20px; font-weight: 700; color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -275,7 +285,17 @@ async function uploadSTT() {
         currentSrtFilename = 'subtitles.srt';
 
         // Hiển thị kết quả
-        let html = '<div style="background:#161b22;padding:10px;border-radius:6px;margin-bottom:10px;border:1px solid #30363d;">';
+        let html = '';
+
+        // Hiển thị tiêu đề video
+        if (data.title) {
+            html += '<div class="title-box">';
+            html += '<div class="title-label">📌 TIÊU ĐỀ VIDEO:</div>';
+            html += '<div class="title-text">' + escapeHtml(data.title) + '</div>';
+            html += '</div>';
+        }
+
+        html += '<div style="background:#161b22;padding:10px;border-radius:6px;margin-bottom:10px;border:1px solid #30363d;">';
         html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
         html += '<strong>📝 Toàn bộ văn bản:</strong>';
         html += '<button onclick="sendToTTS()" class="btn-get-voice">🎵 Lấy giọng</button>';
