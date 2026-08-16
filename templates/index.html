@@ -44,12 +44,19 @@
         .status { display: inline-block; margin-left: 15px; color: #f0883e; font-style: italic; }
         .file-input-wrapper { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
         .file-input-wrapper input[type="file"] { color: #8b949e; padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; flex: 1; }
+        .nav-link { 
+            display: inline-block; padding: 12px 25px; background: #f0883e; color: #fff; 
+            text-decoration: none; border-radius: 6px; font-weight: 600; margin-bottom: 25px;
+            transition: 0.2s;
+        }
+        .nav-link:hover { background: #e07b30; }
     </style>
 </head>
 <body>
 <div class="container">
     <h1>🎙️ CapCut TTS & STT Web Tool</h1>
-    <a href="/download-video" style="display:inline-block; padding:10px 20px; background:#f0883e; color:#fff; text-decoration:none; border-radius:6px; font-weight:600; margin-bottom:20px;">🎬 Tải Video</a>
+    
+    <a href="/download-video" class="nav-link">🎬 Tải Video</a>
 
     <!-- TTS SECTION -->
     <div class="card">
