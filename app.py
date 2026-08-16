@@ -37,6 +37,51 @@ def get_voices():
                 _voices_cache = []
         return _voices_cache
 
+def format_srt_time(ms):
+    """
+    Chuyển milliseconds sang định dạng SRT: HH:MM:SS,mmm
+    """
+    ms = int(ms)
+    hours = ms // 3600000
+    minutes = (ms % 3600000) // 60000
+    seconds = (ms % 60000) // 1000
+    millis = ms % 1000
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d},{millis:03d}"
+
+def generate_filename(ext="mp3"):
+    """
+    Tạo tên file theo định dạng DD-MM-STT.extension
+    Tự động tăng STT theo số file đã tồn tại trong ngày
+    """
+    now = datetime.now()
+    day = f"{now.day:02d}"
+    month = f"{now.month:02d}"
+    
+    # Tìm số thứ tự cao nhất hiện có trong ngày
+    pattern = f"^{day}-{month}-(\\d+)\\."
+    existing_files = [f for f in os.listdir('.') if re.match(pattern, f)]
+    
+    max_num = 0
+    for f in existing_files:
+        match = re.search(pattern, f)
+        if match:
+            num = int(match.group(1))
+            if num > max_num:
+                max_num = num
+    
+    video_num = max_num + 1
+    filename = f"{day}-{month}-{video_num}.{ext}"
+    
+    # Phòng trường hợp trùng
+    counter = 0
+    while os.path.exists(filename):
+        counter += 1
+        filename = f"{day}-{month}-{video_num}_{counter}.{ext}"
+    
+    return filename
+
+
+
 def generate_srt(utterances):
     """
     Tạo nội dung SRT từ danh sách utterances.
